@@ -20,7 +20,7 @@ class RankedLogger(logging.LoggerAdapter):
         :param rank_zero_only: Whether to force all logs to only occur on the rank zero process. Default is `False`.
         :param extra: (Optional) A dict-like object which provides contextual information. See `logging.LoggerAdapter`.
         """
-        logger = logging.getLogger(name)
+        logger = logging.getLogger( )
         super().__init__(logger=logger, extra=extra)
         self.rank_zero_only = rank_zero_only
 

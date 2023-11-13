@@ -1,0 +1,39 @@
+_target_: src.models.atpn.ATPN
+
+encoder:
+  _target_: src.models.encoder.env_drv_encoder.EnvDrvEncoder
+  use_env: True
+  proposal_num: 6
+  target_in_dim: 9
+  agent_in_dim: 9
+  encoder_out_dim: 256
+  agent_steps: 49
+  # map
+  use_map: True
+  map_in_dim: 6
+  map_steps: 19
+  # drv
+  use_drv: True
+  num_dense_feature: 27
+  num_sparse_features: [13, 3, 6, 2, 5, 5, 18, 4, 2, 2, 3, 16]
+  drv_embedding_dim: 256
+  mlp_dims: [256, 128, 64]
+  drv_fi: dot
+  dropout: 0.2
+
+feature_interact:
+  _target_: src.models.feature_interact.cross_attention.FICrossAtten
+  num_head: 4
+  hidden_size: 256
+  pooling: max
+  attention: self
+
+decoder:
+  _target_: src.models.decoder.takeover.TakeOverDecoder
+  input_dim: 256
+  output_dim: 1
+
+weight_decay: 2e-5
+lr_decay: 0.1
+lr: 2e-4
+lbl_proc: log

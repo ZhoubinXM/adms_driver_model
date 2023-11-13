@@ -1,0 +1,5 @@
+[style]
+split_before_named_assigns = false
+split_arguments_when_comma_terminated = false
+column_limit = 120
+
