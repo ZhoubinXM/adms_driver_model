@@ -37,24 +37,16 @@ class EnvDrvEncoder(Encoder):
         self.use_drv = use_drv
 
         self.num_sparse_features = num_sparse_features
-        embedding_dims = [
-            drv_embedding_dim for _ in range(len(self.num_sparse_features))
-        ]
+        embedding_dims = [drv_embedding_dim for _ in range(len(self.num_sparse_features))]
         self.mlp_dims = mlp_dims
         self.drv_fi = drv_fi
 
         if use_env:
             self.use_map = True
-            self.queries = nn.Parameter(torch.eye(proposal_num,
-                                                  encoder_out_dim),
-                                        requires_grad=True)
+            self.queries = nn.Parameter(torch.eye(proposal_num, encoder_out_dim), requires_grad=True)
             self.target_encoder = TargetEncoder(target_in_dim, encoder_out_dim)
-            self.target_vec_encoder = TargetVecEncoder(target_in_dim,
-                                                       encoder_out_dim // 2,
-                                                       agent_steps, 3)
-            self.agent_vec_encoder = AgentVecEncoder(agent_in_dim,
-                                                     encoder_out_dim // 2,
-                                                     agent_steps, 3)
+            self.target_vec_encoder = TargetVecEncoder(target_in_dim, encoder_out_dim // 2, agent_steps, 3)
+            self.agent_vec_encoder = AgentVecEncoder(agent_in_dim, encoder_out_dim // 2, agent_steps, 3)
             self.cross_attention = CrossAttentionLayer(
                 head_num=4,
                 d_model=encoder_out_dim,
@@ -62,11 +54,15 @@ class EnvDrvEncoder(Encoder):
                 norm_dim=None,
                 dropout=dropout,
             )
-        self.map_encoder = (MapEncoder(map_in_dim, encoder_out_dim //
-                                       2, map_steps, 3) if use_map else None)
+        self.map_encoder = (MapEncoder(map_in_dim, encoder_out_dim // 2, map_steps, 3) if use_map else None)
         if use_drv:
             if self.drv_fi == 'mlp':
-                pass
+                self.driver_encoder = DriverDenseModel(
+                    num_dense_features=num_dense_feature,
+                    num_sparse_features=self.num_sparse_features,
+                    embedding_dims=embedding_dims,
+                    mlp_dims=self.mlp_dims,
+                )
             else:
                 self.driver_encoder = DriverModel(
                     num_dense_features=num_dense_feature,
@@ -74,10 +70,10 @@ class EnvDrvEncoder(Encoder):
                     embedding_dims=embedding_dims,
                     mlp_dims=self.mlp_dims,
                     interaction_type=self.drv_fi,
-            )
-        
+                )
+
         self.apply(weight_init)
-    
+
     def _forward(
         self,
         target: torch.Tensor,
@@ -108,9 +104,7 @@ class EnvDrvEncoder(Encoder):
         """
         acsr, mask, driver_enc = None, None, None
         if self.use_env:
-            proposal_queries = self.queries.view(1, 1,
-                                                 *self.queries.shape).repeat(
-                                                     *target.shape[:2], 1, 1)
+            proposal_queries = self.queries.view(1, 1, *self.queries.shape).repeat(*target.shape[:2], 1, 1)
 
             agent_mask_n, agent_mask_c, agent_mask_h, agent_mask_w = agent_mask.shape
 
@@ -118,28 +112,22 @@ class EnvDrvEncoder(Encoder):
             target_vec_enc = self.target_vec_encoder(target)
             agent_enc = self.agent_vec_encoder(
                 agent,
-                agent_mask[0:agent_mask_n, 1:agent_mask_c, 0:agent_mask_h,
-                           0:agent_mask_w],
+                agent_mask[0:agent_mask_n, 1:agent_mask_c, 0:agent_mask_h, 0:agent_mask_w],
             )
             if self.use_map:
                 lane_enc = self.map_encoder(lane, lane_mask)
 
             # cross attention for proposals
-            proposals, _ = self.cross_attention(proposal_queries.transpose(
-                1, 2),
-                                                target_enc.transpose(1, 2),
-                                                mask=None)
+            proposals, _ = self.cross_attention(proposal_queries.transpose(1, 2), target_enc.transpose(1, 2), mask=None)
             # self attention for anchors
             acsr = torch.cat((target_vec_enc, agent_enc), dim=1)
 
-            mask = agent_mask[0:agent_mask_n, 0:agent_mask_c, 0:1,
-                              0:agent_mask_w]
+            mask = agent_mask[0:agent_mask_n, 0:agent_mask_c, 0:1, 0:agent_mask_w]
             if self.use_map:
                 acsr = torch.cat((acsr, lane_enc), dim=1)
                 lane_mask_n, lane_mask_c, lane_mask_h, lane_mask_w = lane_mask.shape
                 mask = torch.cat(
-                    (mask, lane_mask[0:lane_mask_n, 0:lane_mask_c, 0:1,
-                                     0:lane_mask_w]),
+                    (mask, lane_mask[0:lane_mask_n, 0:lane_mask_c, 0:1, 0:lane_mask_w]),
                     dim=1,
                 )
             mask = mask.transpose(1, -1)

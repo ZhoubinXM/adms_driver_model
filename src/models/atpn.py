@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torchvision.utils import make_grid
 import lightning.pytorch as pl
 
 import src.models.encoder.encoder as enc
@@ -10,7 +11,6 @@ from typing import Any, Dict, Tuple, Optional
 # metrics
 from torchmetrics import Metric, MinMetric, MeanMetric
 from torchmetrics.regression import MeanAbsoluteError, R2Score, MeanAbsolutePercentageError
-
 
 class ATPN(pl.LightningModule):
     """
@@ -23,15 +23,18 @@ class ATPN(pl.LightningModule):
         Initializes model for ADMS prediction task
         """
         super().__init__()
+        torch.autograd.set_detect_anomaly(True)
         self.weight_decay = kwargs['weight_decay']
         self.lr_decay = kwargs['lr_decay']
         self.lr = kwargs['lr']
         self.lbl_proc = kwargs['lbl_proc']
+        self.step_size = kwargs['step_size']
         self.encoder = encoder
         self.fi = feature_interact
         self.decoder = decoder
         self.criterion = nn.SmoothL1Loss(beta=1.0)
         self.metrics: list[Metric] = [MeanAbsoluteError(), MeanAbsolutePercentageError(), R2Score()]
+        self.attention_scores = None
 
     def forward(self, *args, **kwargs) -> torch.Tensor:
         """
@@ -42,6 +45,9 @@ class ATPN(pl.LightningModule):
         """
         encodings = self.encoder(*args, **kwargs)
         encodings = self.fi(encodings)
+        if isinstance(encodings, tuple):
+            self.attention_scores = encodings[1]
+            encodings = encodings[0]
         outputs = self.decoder(encodings)
 
         return outputs
@@ -80,6 +86,8 @@ class ATPN(pl.LightningModule):
         self.log('train/tob_mape', metrics[1][1], prog_bar=False, on_step=False, on_epoch=True, sync_dist=True)
         self.log('train/tot_r2', metrics[0][2], prog_bar=False, on_step=False, on_epoch=True, sync_dist=True)
         self.log('train/tob_r2', metrics[1][2], prog_bar=False, on_step=False, on_epoch=True, sync_dist=True)
+        if self.attention_scores is not None and self.global_step == batch_idx + (self.current_epoch * 108):
+            self.plot_attention(self.attention_scores)
         return losses[0]
 
     def validation_step(self, data, batch_idx):
@@ -144,7 +152,7 @@ class ATPN(pl.LightningModule):
         ]
 
         optimizer = torch.optim.Adam(optim_groups, lr=self.lr, weight_decay=self.weight_decay)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=40, gamma=self.lr_decay)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=self.step_size, gamma=self.lr_decay)
 
         return [optimizer], [scheduler]
 
@@ -175,3 +183,13 @@ class ATPN(pl.LightningModule):
             pred_tob = torch.pow(pred_tob, 3)
 
         return gt_tot, gt_tob, pred_tot, pred_tob
+
+    def plot_attention(self, attention_scores):
+        attention_scores = attention_scores[:2]
+        # attention_scores: shape (batch_size, num_heads, sequence_length, sequence_length)
+        batch_size, num_heads, seq_len, _ = attention_scores.shape
+        for i in range(batch_size):
+            for j in range(num_heads):
+                grid = attention_scores[i, j].unsqueeze(0)
+                self.logger.experiment.add_image(f"sample_{i}_attention_scores/head_{j}", grid,
+                                                 global_step=self.global_step)

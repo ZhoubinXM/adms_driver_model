@@ -27,6 +27,7 @@ feature_interact:
   hidden_size: 256
   pooling: max
   attention: self
+  plot: False
 
 decoder:
   _target_: src.models.decoder.takeover.TakeOverDecoder
@@ -37,3 +38,4 @@ weight_decay: 2e-5
 lr_decay: 0.1
 lr: 2e-4
 lbl_proc: log
+step_size: 30

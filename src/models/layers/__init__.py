@@ -9,3 +9,4 @@ from src.models.layers.head import MLPHead
 from src.models.layers.attention_layers import CrossAttentionLayer, SelfAttentionLayer
 from src.models.layers.driver_encoder import DriverModel
 from src.models.layers.driver_atten import DriverAttenModel
+from src.models.layers.driver_dense import DriverDenseModel
