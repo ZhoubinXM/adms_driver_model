@@ -1,8 +1,11 @@
+from lightning.pytorch.utilities.types import STEP_OUTPUT
+import os
 import torch
 import torch.nn as nn
 from torchvision.utils import make_grid
 import lightning.pytorch as pl
-
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import src.models.encoder.encoder as enc
 import src.models.feature_interact.feature_interact as fi
 import src.models.decoder.decoder as dec
@@ -11,6 +14,7 @@ from typing import Any, Dict, Tuple, Optional
 # metrics
 from torchmetrics import Metric, MinMetric, MeanMetric
 from torchmetrics.regression import MeanAbsoluteError, R2Score, MeanAbsolutePercentageError
+
 
 class ATPN(pl.LightningModule):
     """
@@ -35,6 +39,7 @@ class ATPN(pl.LightningModule):
         self.criterion = nn.SmoothL1Loss(beta=1.0)
         self.metrics: list[Metric] = [MeanAbsoluteError(), MeanAbsolutePercentageError(), R2Score()]
         self.attention_scores = None
+        self.output_dir = kwargs['output_dir']
 
     def forward(self, *args, **kwargs) -> torch.Tensor:
         """
@@ -56,7 +61,7 @@ class ATPN(pl.LightningModule):
         """main model step"""
         inputs = self._organize_inputs(data)
         pred_tot, pred_tob = self(**inputs)
-        gt_tot, gt_tob = data[4], data[5]
+        gt_tot, gt_tob = data[5], data[6]
         gt_tot, gt_tob = self.proc_label(gt_tot, gt_tob)
         pred_tot = pred_tot.view(-1)
         pred_tob = pred_tob.view(-1)
@@ -114,6 +119,13 @@ class ATPN(pl.LightningModule):
         self.log('test/tot_r2', metrics[0][2], prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
         self.log('test/tob_r2', metrics[1][2], prog_bar=True, on_step=False, on_epoch=True, sync_dist=True)
 
+    def on_test_batch_end(self, outputs, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> None:
+        if self.attention_scores is not None:
+            save_dir = os.path.join(self.output_dir, f"batch_{batch_idx+1}")
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            self.save_attention_plots(self.attention_scores, save_dir, batch[0])
+
     def configure_optimizers(self):
         decay = set()
         no_decay = set()
@@ -157,7 +169,7 @@ class ATPN(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def _organize_inputs(self, data):
-        inputs = {'inputs_0': data[0], 'inputs_1': data[1], 'sparse_feature': data[2], 'dense_feature': data[3]}
+        inputs = {'inputs_0': data[1], 'inputs_1': data[2], 'sparse_feature': data[3], 'dense_feature': data[4]}
         return inputs
 
     def proc_label(self, gt_tot, gt_tob):
@@ -193,3 +205,22 @@ class ATPN(pl.LightningModule):
                 grid = attention_scores[i, j].unsqueeze(0)
                 self.logger.experiment.add_image(f"sample_{i}_attention_scores/head_{j}", grid,
                                                  global_step=self.global_step)
+
+    def save_attention_plots(self, attention_scores, directory, uuids):
+        # attention_scores: shape (batch_size, num_heads, sequence_length, sequence_length)
+        batch_size, num_heads, seq_len, _ = attention_scores.shape
+        for i in range(batch_size):
+            fig, axs = plt.subplots(1, num_heads, figsize=(15, 4))
+            fig.suptitle(f'uuid: {uuids[i]}')
+            for j in range(num_heads):
+                # Draw only the first row of the attention scores
+                im = axs[j].imshow(attention_scores[i, j, 0, :].reshape(1, -1).cpu().detach().numpy(), cmap='viridis',
+                                   aspect='auto')
+                axs[j].set_title(f'Head {j+1}')
+                axs[j].set_yticks([])  # Hide the y-axis
+                # Draw colorbar
+                divider = make_axes_locatable(axs[j])
+                cax = divider.append_axes("bottom", size="5%", pad=0.35)
+                plt.colorbar(im, cax=cax, orientation='horizontal')
+            plt.savefig(f'{directory}/{uuids[i]}.jpg')
+            plt.close(fig)  # Close the figure to free up memory

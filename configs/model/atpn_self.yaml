@@ -39,3 +39,4 @@ lr_decay: 0.1
 lr: 2e-4
 lbl_proc: log
 step_size: 30
+output_dir: ${paths.output_dir}

@@ -37,7 +37,7 @@ class ADMSDataset(Dataset):
         sparse_fea = data.iloc[16:-2].values.astype(np.float32)
         tot = data.iloc[-2]
         tob = data.iloc[-1]
-        return agents, lanes, dense_fea, sparse_fea, tot, tob
+        return data.uuid, agents, lanes, dense_fea, sparse_fea, tot, tob
 
 
 if __name__ == "__main__":
