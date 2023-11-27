@@ -1,5 +1,7 @@
 _target_: src.data.adms_module.ADMSDataModule
 root: ./data
+train_file: 
+test_file:
 train_batch_size: 128
 val_batch_size: 128
 test_batch_size: 128

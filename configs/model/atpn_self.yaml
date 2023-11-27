@@ -28,6 +28,7 @@ feature_interact:
   pooling: max
   attention: self
   plot: False
+  dropout: 0.1
 
 decoder:
   _target_: src.models.decoder.takeover.TakeOverDecoder
@@ -40,3 +41,4 @@ lr: 2e-4
 lbl_proc: log
 step_size: 30
 output_dir: ${paths.output_dir}
+mode: reg

@@ -14,14 +14,15 @@ class FICrossAtten(FeatureInteract):
         pooling: str = "max",
         attention: str = "self",
         plot: bool = False,
+        dropout: float = 0.1,
     ):
         super().__init__()
         self.pooling_method = pooling
         self.attention_method = attention
         self.plot = plot
         self.cross_atten_layer = CrossAttentionLayer(head_num=num_head, d_model=hidden_size, d_ff=4 * hidden_size,
-                                                     norm_dim=None, type=self.attention_method)
-        self.self_atten_layer = SelfAttentionLayer(head_num=num_head, d_model=hidden_size, d_ff=4 * hidden_size)
+                                                     norm_dim=None, type=self.attention_method, dropout=dropout)
+        self.self_atten_layer = SelfAttentionLayer(head_num=num_head, d_model=hidden_size, d_ff=4 * hidden_size, dropout=dropout)
         self.apply(weight_init)
 
     def forward(self, encodings: list[torch.Tensor]):

@@ -16,14 +16,18 @@ class TakeOverDecoder(Decoder):
                                 2 * input_dim,
                                 norm_dim=None)
         self.tob_head = MLPHead(input_dim,
-                                output_dim,
+                                output_dim+1,
                                 2 * input_dim,
                                 norm_dim=None)
         self.apply(weight_init)
+        self.output_dim = output_dim
         
     def forward(self, encoding):
         if isinstance(encoding, tuple):
             encoding, mask = encoding[0], encoding[1]
             encoding = encoding.reshape(encoding.shape[0], 1, 1, -1)
             encoding = self.dense(encoding)
+        if self.output_dim != 1:
+            return torch.softmax(self.tot_head(encoding), dim=-1), \
+                    torch.softmax(self.tob_head(encoding), dim=-1)
         return self.tot_head(encoding), self.tob_head(encoding)

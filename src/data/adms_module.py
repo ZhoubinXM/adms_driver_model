@@ -16,6 +16,8 @@ class ADMSDataModule(pl.LightningDataModule):
                  num_workers: int = 0,
                  pin_memory: bool = True,
                  persistent_workers: bool = True,
+                 train_file: str = None,
+                 test_file: str = None,
                  **kwargs) -> None:
         super(ADMSDataModule, self).__init__()
         self.root = root
@@ -27,6 +29,13 @@ class ADMSDataModule(pl.LightningDataModule):
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers and num_workers > 0
         self.stage = kwargs['stage']
+        if train_file is not None and test_file is not None:
+            self.train_file = train_file
+            self.test_file = test_file
+        else:
+            self.train_file = 'train_val.pkl'
+            self.test_file = 'test.pkl'
+            
 
     def prepare_data(self) -> None:
         pass
@@ -39,9 +48,9 @@ class ADMSDataModule(pl.LightningDataModule):
             self.test_dataset = ADMSDataset(os.path.join(self.root, 'mini.pkl'))
         else:
             self.train_dataset = ADMSDataset(
-                os.path.join(self.root, 'train_val.pkl'))
-            self.val_dataset = ADMSDataset(os.path.join(self.root, 'test.pkl'))
-            self.test_dataset = ADMSDataset(os.path.join(self.root, 'test.pkl'))
+                os.path.join(self.root, self.train_file))
+            self.val_dataset = ADMSDataset(os.path.join(self.root, self.test_file))
+            self.test_dataset = ADMSDataset(os.path.join(self.root, self.test_file))
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
